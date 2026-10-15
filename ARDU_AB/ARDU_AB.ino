@@ -1,9 +1,9 @@
 /*
-  ARDUVENTURE: http://www.team-arg.org/ardu-manual.html
+  ARDUVENTURE: https://t-arg.github.io/ID-46-Arduventure/
 
-  Arduboy version 1.0.1:  http://www.team-arg.org/ardu-downloads.html
+  Arduboy version 1.0.1:  https://github.com/T-arg/ID-46-Arduventure
 
-  MADE by TEAM a.r.g. : http://www.team-arg.org/more-about.html
+  MADE by TEAM a.r.g. : https://t-arg.github.io/
 
   2017 - 2018 - JO3RI GANTOIS - GAVIN ATKIN - OLIVIER HUARD - SIEGFRIED CROES 
 
@@ -63,11 +63,6 @@ const FunctionPointer PROGMEM mainGameLoop[] = {
   battleGiveRewards,
   stateMenuReboot,
 };
-
-int main() {
-  arduboy.mainNoUSB();
-  return 0;
-}
 
 void setup() {
   arduboy.boot();

@@ -138,22 +138,14 @@ void investigateObjects(byte object)
             fillWithNumber(28, amount * 10);
             player.gold += amount * 10;
           }
-          else if (door == 1)  // 1, 3, 5, 7 Apples lastDoor 1, 6, 11, 16
+          else if (door < 3)   // 1, 3, 5, 7 Apples (lastDoor 1, 6, 11, 16) or Anise (lastDoor 2, 7, 12, 17)
           {
+            byte item = (door - 1) * 2;       // 0 = apple, 2 = anise
             fillWithSentence(48, TEXT_ROLL);  // Found <item> amount <amount>
-            bitSet(player.hasStuff[0], 0);
+            bitSet(player.hasStuff[0], item);
             fillWithNumber(28, amount);
-            player.itemsAmount[0] += amount;
-            fillWithWord(11, 97);             // Apple
-          }
-
-          else if (door == 2)  // 1, 3, 5, 7 Anise lastDoor 2, 7, 12, 17
-          {
-            fillWithSentence(48, TEXT_ROLL);
-            bitSet(player.hasStuff[0], 2);
-            fillWithNumber(28, amount);
-            player.itemsAmount[2] += amount;
-            fillWithWord(11, 99);
+            player.itemsAmount[item] += amount;
+            fillWithWord(11, 97 + item);
           }
 
           else if (door == 3)  // Weapons 1, 2, 3, 4 lastDoor 3, 8, 13, 18

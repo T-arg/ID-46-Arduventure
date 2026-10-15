@@ -31,21 +31,14 @@ void drawMap()
           byte chunk_pos_y = (miniCamY + miniMapOnScreenY) >> 3;
           if (getMapFog(chunk_pos_x, chunk_pos_y))
           {
-            byte testRegion;
+            byte chunk = getChunk(chunk_pos_x, chunk_pos_y);
             miniMapTile = 8;
-            // Regional chunk
-            if (getChunk(chunk_pos_x, chunk_pos_y) < 128)
+            // Regional chunk (getChunk has set lastRegion)
+            if (chunk < 128)
             {
               if (getChunkBit(chunk_pos_x, chunk_pos_y))
               {
-                testRegion = getRegion(chunk_pos_x, chunk_pos_y);
-                /*if (testRegion < 4) miniMapTile = 2;
-                else if (testRegion < 6) miniMapTile = 3;
-                else if (testRegion < 10) miniMapTile = 4;
-                else if (testRegion == 10) miniMapTile = 3;
-                else if (testRegion == 11) miniMapTile = 2;
-                else if (testRegion == 12) miniMapTile = 1;*/
-                switch (testRegion)
+                switch (lastRegion)
                 {
                   case 4: case 5: case 10:
                   miniMapTile = 3;
@@ -60,15 +53,13 @@ void drawMap()
                   miniMapTile = 2;
                 }
               }
-              //else miniMapTile = 8;
             }
             // Specific chunk
             else
             {
-              testRegion = getChunk(chunk_pos_x, chunk_pos_y);
-              if (testRegion == 170) miniMapTile = 5;
-              else if (testRegion == 172) miniMapTile = 6;
-              else if (testRegion == 146) miniMapTile = 8;
+              if (chunk == 170) miniMapTile = 5;
+              else if (chunk == 172) miniMapTile = 6;
+              else if (chunk == 146) miniMapTile = 8;
               else miniMapTile = 7;
             }
           }
@@ -153,8 +144,8 @@ void stateGamePlaying()
   checkCam();
   //int investigate_x = player.x - 3 + pgm_read_byte(&collisionPoints[8 + playerDirection][0]);
   //int investigate_y = player.y - 1 + pgm_read_byte(&collisionPoints[8 + playerDirection][1]);
-  int investigate_x = player.x - 3 + collisionPoints[8 + playerDirection][0];
-  int investigate_y = player.y - 1 + collisionPoints[8 + playerDirection][1];
+  int investigate_x = player.x - 3 + pgm_read_byte(&collisionPoints[8 + playerDirection][0]);
+  int investigate_y = player.y - 1 + pgm_read_byte(&collisionPoints[8 + playerDirection][1]);
   if (talkingWithNPC) investigatePeople(investigate_x, investigate_y);
   if (investigating) investigateObjects(getTileID(investigate_x, investigate_y));
 
@@ -238,8 +229,9 @@ void walkingThroughDoor()
     }
     else
     {
-      if ((getChunk(playerReducedX, playerReducedY) & 0x7F) == 34)  player.x = 336;
-      else player.x = (720 + (384 * ((getChunk(playerReducedX, playerReducedY) & 0x7F) - 42)));
+      byte doorChunk = getChunk(playerReducedX, playerReducedY) & 0x7F;
+      if (doorChunk == 34)  player.x = 336;
+      else player.x = (720 + (384 * (doorChunk - 42)));
       player.y = 3048;
     }
     checkCam();

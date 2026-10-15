@@ -18,9 +18,8 @@
 #define EXP_TOTAL                    200
 
 
-const byte animSeq[] = { 0, 1, 2, 1 };
-//const unsigned char PROGMEM collisionPoints[][2] =
-const byte collisionPoints[][2] =
+const byte PROGMEM animSeq[] = { 0, 1, 2, 1 };
+const byte PROGMEM collisionPoints[][2] =
 {
   // Collision points for walking {x, y}
   // FACING_SOUTH
@@ -95,13 +94,9 @@ void openMiniMap()
   gameState = STATE_GAME_MAP;
 }
 
-void setPlayer()
+// the starting values of a new game, copied from PROGMEM
+const Player PROGMEM playerStart =
 {
-  playerDirection = FACING_SOUTH;
-  playerSteps = 0;
-  playerWalking = false;
-  player =
-  {
     PLAYER_START_X, PLAYER_START_Y,           // position
     20, 20,                                   // health
     10, 10,                                   // magic
@@ -225,7 +220,14 @@ void setPlayer()
 
     {5, 50, 50, 50, 50, 50},                     // name
     { 0B00000000, 0B00000000},                   // Fog x and y coordinates
-  };
+};
+
+void setPlayer()
+{
+  playerDirection = FACING_SOUTH;
+  playerSteps = 0;
+  playerWalking = false;
+  memcpy_P(&player, &playerStart, sizeof(Player));
 }
 
 /*
@@ -294,8 +296,8 @@ void drawPlayer()
   }
   else playerFrame = 1;
 
-  //byte spriteFrame = (foundSomething) ? 1 : (animSeq[playerFrame] + 3 * playerDirection);
-  byte spriteFrame = animSeq[playerFrame] + 3 * playerDirection;
+  //byte spriteFrame = (foundSomething) ? 1 : (pgm_read_byte(&animSeq[playerFrame]) + 3 * playerDirection);
+  byte spriteFrame = pgm_read_byte(&animSeq[playerFrame]) + 3 * playerDirection;
   sprites.drawPlusMask(player.x - camX + 2, player.y - camY - (playerFrame % 2) + 1, playerHead_plus_mask, spriteFrame / 3);
   sprites.drawPlusMask(player.x - camX + 2, player.y - camY + 8, playerFeet_plus_mask, spriteFrame);
   if (spriteFrame == 1) blinkingEyes(player.x - camX + 6, player.y - camY + 7);

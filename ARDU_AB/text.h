@@ -26,28 +26,48 @@ byte prevSentence = 255;
 bool rollText = false;
 bool textReset = true;
 
-int findBegin(byte searchObject, boolean wordOrSentence)
+int findBegin(byte searchObject)   // start of a sentence
 {
   int i = 0;
   while (searchObject != 0)
   {
-    if (!wordOrSentence) i += pgm_read_byte(&library[i]) + 1;
-    else i += pgm_read_byte(&sentences[i]) + 1;
+    i += pgm_read_byte(&sentences[i]) + 1;
     searchObject--;
   }
   return i;
 }
 
+// the packed library: 4 bits length + 6 bits per character
+byte getLibraryBits(uint16_t pos, byte n)
+{
+  uint16_t data = pgm_read_byte(library + (pos >> 3)) | ((uint16_t)pgm_read_byte(library + (pos >> 3) + 1) << 8);
+  return (data >> (pos & 7)) & ((1 << n) - 1);
+}
+
+// copies a word of the library into textBox at dest, returns its length
+byte copyWord(byte dest, byte word)
+{
+  uint16_t pos = 0;
+  byte len;
+  for (;;)
+  {
+    len = getLibraryBits(pos, 4);
+    pos += 4;
+    if (!word--) break;
+    pos += len * 6;
+  }
+  for (byte i = 0; i < len; i++)
+  {
+    byte c = getLibraryBits(pos, 6);
+    pos += 6;
+    textBox[dest + i] = (c == 63) ? NEWLINE : c;
+  }
+  return len;
+}
+
 void fillWithWord(byte startPoint, byte wordOfLibrary)
 {
-  byte totalCharacters = 0;
-  int startWord = findBegin(wordOfLibrary, WORD);
-  byte sizeWord = pgm_read_byte(&library[startWord]);
-  for (int i = startWord + 1; i < startWord + 1 + sizeWord; i++)
-  {
-    textBox[(startPoint ? startPoint : 1) + totalCharacters] = pgm_read_byte(&library[i]);
-    totalCharacters++;
-  }
+  byte totalCharacters = copyWord(startPoint ? startPoint : 1, wordOfLibrary);
   if (!startPoint) textBox[0] = totalCharacters;
 }
 
@@ -77,28 +97,23 @@ void fillWithSentence(byte sentenceOfLibrary, bool roll = false)
   }
   rollText = roll;
   byte totalCharacters = 0;
-  int startSentence = findBegin(sentenceOfLibrary, SENTENCE);
+  int startSentence = findBegin(sentenceOfLibrary);
   byte sizeSentence = pgm_read_byte(&sentences[startSentence]);
   for (int i = startSentence + 1 ; i < startSentence + 1 + sizeSentence; i++)
   {
     byte wordOfLibrary = pgm_read_byte(&sentences[i]);
-    if (wordOfLibrary == NEWLINE)
-    {
-      textBox[1 + totalCharacters] = NEWLINE;
-      totalCharacters++;
-    }
-    else
-    {
-      int startWord = findBegin(wordOfLibrary, WORD);
-      byte sizeWord = pgm_read_byte(&library[startWord]);
-      for (int k = startWord + 1; k < startWord + 1 + sizeWord; k++)
-      {
-        textBox[1 + totalCharacters] = pgm_read_byte(&library[k]);
-        totalCharacters++;
-      }
-    }
+    if (wordOfLibrary == NEWLINE) textBox[1 + totalCharacters++] = NEWLINE;
+    else totalCharacters += copyWord(1 + totalCharacters, wordOfLibrary);
   }
   textBox[0] = totalCharacters;
+}
+
+
+// a sentence followed by one word of the library at position pos
+void textWithWord(byte sentence, byte pos, byte word, bool roll)
+{
+  fillWithSentence(sentence, roll);
+  fillWithWord(pos, word);
 }
 
 

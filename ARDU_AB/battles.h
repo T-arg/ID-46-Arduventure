@@ -43,14 +43,14 @@ byte getMagicName()
     magictype != TYPE_NORMAL) ? 120 + magictype : 236);
 }
 
-const int8_t offsetattack[] = {0, -2, -4, -5, -4, -2, 0};
-const int8_t offsetdead[] = {2, 5, 9, 14, 20, 26, 32};
+const int8_t PROGMEM offsetattack[] = {0, -2, -4, -5, -4, -2, 0};
+const int8_t PROGMEM offsetdead[] = {2, 5, 9, 14, 20, 26, 32};
 
 /* type table
  *  row - attack type
  *  col - defense type
  */
-const byte typetable[] = {
+const byte PROGMEM typetable[] = {
 //N, W, L, F
   1, 1, 1, 1, // attack - normal
   1, 1, 0, 2, // attack - water
@@ -64,7 +64,7 @@ const byte typetable[] = {
 */
 byte getDamageMult(int8_t spelltype, int8_t defensetype)
 {
-  crit = typetable[spelltype * 4 + defensetype];
+  crit = pgm_read_byte(&typetable[spelltype * 4 + defensetype]);
   return crit;
 }
 
@@ -101,10 +101,10 @@ int8_t getEnemyOffset( )
   {
     case BATTLE_LEVEL_UP:
     case BATTLE_ENEMY_DEAD:
-      offset = offsetdead[offsetIndex];
+      offset = (int8_t)pgm_read_byte(&offsetdead[offsetIndex]);
       break;
     default://case BATTLE_PLAYER_HURT:
-      offset = offsetattack[offsetIndex];
+      offset = (int8_t)pgm_read_byte(&offsetattack[offsetIndex]);
       break;
     //default:
       //offsetIndex = 0;
@@ -129,8 +129,7 @@ void stateGameBattle()
     if (battleBlink < 30 || lastDamageDealt == 0 || battleProgress != BATTLE_BLINK_ENEMY || battleBlink % 2 == 0)
     {
       // Enemy details
-      fillWithSentence(75);
-      fillWithWord(1, getEnemyName());
+      textWithWord(75, 1, getEnemyName(), TEXT_NOROLL);
       if (isBoss)
       {
         drawBoss(getEnemyOffset());
@@ -279,15 +278,13 @@ void stateGameBattle()
           if (lastDamageDealt > 0)
           {
             // Landed hit
-            fillWithSentence(67, TEXT_ROLL);
-            fillWithWord(1, getEnemyName());
+            textWithWord(67, 1, getEnemyName(), TEXT_ROLL);
             fillWithNumber(11, lastDamageDealt);
           }
           else
           {
             // Missed
-            fillWithSentence(72, TEXT_ROLL);
-            fillWithWord(2, 62);
+            textWithWord(72, 2, 62, TEXT_ROLL);
           }
         }
         else
@@ -299,8 +296,7 @@ void stateGameBattle()
           }
           else
           {
-            fillWithSentence(79, TEXT_ROLL);
-            fillWithWord(10, getMagicName());
+            textWithWord(79, 10, getMagicName(), TEXT_ROLL);
           }
         }
         drawTextBox(0, 52, WHITE);
@@ -334,21 +330,18 @@ void stateGameBattle()
             if (lastDamageDealt > 0)
             {
               // Landed hit
-              fillWithSentence(67, TEXT_ROLL);
-              fillWithWord(2, 62); // YOU
+              textWithWord(67, 2, 62, TEXT_ROLL);
               fillWithNumber(11, lastDamageDealt);
             }
             else
             {
               // Missed
-              fillWithSentence(72, TEXT_ROLL);
-              fillWithWord(1, getEnemyName());
+              textWithWord(72, 1, getEnemyName(), TEXT_ROLL);
             }
           } 
           else
           {
-            fillWithSentence(70, TEXT_ROLL);
-            fillWithWord(1, getEnemyName());
+            textWithWord(70, 1, getEnemyName(), TEXT_ROLL);
           }
           drawTextBox(0, 52, WHITE);
         }
@@ -380,8 +373,7 @@ void stateGameBattle()
         if (battleBlink < 50)
         {
           ++battleBlink;
-          fillWithSentence(68, TEXT_ROLL);
-          fillWithWord(14, getEnemyName());
+          textWithWord(68, 14, getEnemyName(), TEXT_ROLL);
           drawTextBox(0, 52, WHITE);
         }
         else {
@@ -403,8 +395,7 @@ void stateGameBattle()
       {
         battleProgress = BATTLE_NEXT_TURN;
         if (battleBlink < 50) {
-          fillWithSentence(69, TEXT_ROLL);
-          fillWithWord(3, getEnemyName());
+          textWithWord(69, 3, getEnemyName(), TEXT_ROLL);
           drawTextBox(0, 52, WHITE);
           ++battleBlink;
           battleProgress = BATTLE_ENEMY_INTRO;
@@ -417,8 +408,7 @@ void stateGameBattle()
        */
       case BATTLE_START:
       {
-        fillWithSentence(45);
-        fillWithWord(16, getMagicName());
+        textWithWord(45, 16, getMagicName(), TEXT_NOROLL);
         sprites.drawSelfMasked( 3 + (54 * cursorX), 52 + (6 * cursorY), font, 44);
         drawTextBox(4, 52, WHITE);
       }
@@ -502,8 +492,7 @@ void stateGameBattle()
       drawTextBox(0, 2, WHITE);
     }
     // Magic cost
-    fillWithSentence(81);
-    fillWithWord(1, getMagicName());
+    textWithWord(81, 1, getMagicName(), TEXT_NOROLL);
     fillWithNumber(7, magiccost);
     drawTextBox(92, 15, BLACK);
   }
@@ -593,7 +582,7 @@ void setupBattle()
     default:    // normal
       magictype = TYPE_NORMAL;
   }
-  magiccost = MAGIC_COST[magictype];
+  magiccost = pgm_read_byte(&MAGIC_COST[magictype]);
 }
 
 /* Entry function to battle.

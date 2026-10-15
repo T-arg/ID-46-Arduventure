@@ -44,7 +44,7 @@
   16+3, 16+6             // Bone, Iron
 };*/
 
-const byte shopPrices[] = {
+const byte PROGMEM shopPrices[] = {
   20, 70, 15, 60
   //199, 999,
   //99, 499 
@@ -53,11 +53,11 @@ const byte shopPrices[] = {
 void buyItem()
 {
   needMoreMoney = true;
-  if (player.gold >= shopPrices[cursorY])
+  if (player.gold >= pgm_read_byte(&shopPrices[cursorY]))
   {
     question = false;
     needMoreMoney = false;
-    player.gold -= shopPrices[cursorY];
+    player.gold -= pgm_read_byte(&shopPrices[cursorY]);
     bitSet(player.hasStuff[0], cursorY);
     ++player.itemsAmount[cursorY];
     /*switch (shopItems[cursorY])
@@ -86,7 +86,7 @@ void drawShop()
     fillWithWord(0, 97 + i);
     drawTextBox(12, 9 + positionText, BLACK);
     // Item cost
-    fillWithNumber(0, shopPrices[i]);
+    fillWithNumber(0, pgm_read_byte(&shopPrices[i]));
     drawTextBox(110, 9 + positionText, BLACK);
     positionText -= 6;
   }

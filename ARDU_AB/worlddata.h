@@ -17,15 +17,17 @@
 #define TILE_CLOSED_CHEST             57
 #define TILE_OPENED_CHEST             58
 
+byte lastRegion;                                 // the region getChunk() found for the last chunk it looked at
+
+// region of a chunk: the first rectangle in regions[] that holds it
 byte getRegion(byte chunk_pos_x, byte chunk_pos_y)
 {
   for (byte i = 0; i < TOTAL_REGIONS; i++)
   {
-    Point chunk_pos = { .x = chunk_pos_x, .y = chunk_pos_y};
-    Rect reg = {.x = pgm_read_byte(regions + i * 4), .y = pgm_read_byte(regions + 1 + i * 4),
-                .width = pgm_read_byte(regions + 2 + i * 4), .height = pgm_read_byte(regions + 3 + i * 4)
-               };
-    if (arduboy.collide(chunk_pos, reg)) return i;
+    byte rx = pgm_read_byte(regions + i * 4);
+    byte ry = pgm_read_byte(regions + 1 + i * 4);
+    if (chunk_pos_x >= rx && chunk_pos_x - rx < pgm_read_byte(regions + 2 + i * 4) &&
+        chunk_pos_y >= ry && chunk_pos_y - ry < pgm_read_byte(regions + 3 + i * 4)) return i;
   }
   return REGION_FOREST;
 }
@@ -38,292 +40,169 @@ void checkRegion()
 
 bool getChunkBit(byte chunk_x, byte chunk_y)
 {
-  //if (chunk_x < 0 || chunk_x >= LEVEL_CHUNK_W || chunk_y < 0 || chunk_y >= LEVEL_CHUNK_H) return 1;
-  //if (chunk_x >= LEVEL_CHUNK_W || chunk_y >= LEVEL_CHUNK_H) return 1;
-
   byte x = chunk_x / 8;           // 8 is number of chunks per byte
   byte y = chunk_y * 4;           // 4 is number of bytes per row
-  byte i = chunk_x % 8;
-
-  byte b = (pgm_read_byte(solid_map + x + y) & _BV(i));
-  return (b > 0);
+  return (pgm_read_byte(solid_map + x + y) & _BV(chunk_x % 8)) > 0;
 }
 
+// the chunks that were placed one by one (houses, trees, shops ...), sorted on position
+// bits 0 - 11: chunk x + 32 * chunk y / bits 12 - 14: index in specialChunkType
+#define SPECIAL_CHUNKS               43
+const uint16_t PROGMEM specialChunks[] =
+{
+  0x4006, 0x5021, 0x402A, 0x602B, 0x103B, 0x503D, 0x1054, 0x30AB,
+  0x30B4, 0x30C0, 0x60D1, 0x10FD, 0x3138, 0x1154, 0x3161, 0x3170,
+  0x417B, 0x318A, 0x31E5, 0x31ED, 0x6201, 0x3203, 0x1208, 0x3232,
+  0x523A, 0x325D, 0x3273, 0x3277, 0x028F, 0x42C5, 0x32CC, 0x52CE,
+  0x32E1, 0x42F2, 0x62F4, 0x3308, 0x7321, 0x1322, 0x134B, 0x3369,
+  0x3371, 0x338E, 0x23F3
+};
+const byte PROGMEM specialChunkType[] = { 146, 162, 167, 170, 171, 172, 173, 174 };   // 128 + chunk number
+
+// the chunk of each region: { open, solid }, an open chunk with bit 7 set takes the 4 neighbours into account
+const byte PROGMEM regionChunk[] =
+{
+  16, 31,                   // REGION_FIELDS_SWAMP
+  21, 31,                   // REGION_SWAMP_FOREST
+  32, 31,                   // REGION_FOREST_CANYON
+  31, 31,                   // REGION_FIELDS_CANYONS
+  15, 34,                   // REGION_SWAMP_ISLAND_ONE
+  15, 34,                   // REGION_SWAMP_ISLAND_TWO
+  26, 31,                   // REGION_LONG_ROAD
+  35, 34,                   // REGION_APPLE_FARM
+  0x80 + 16, 31,            // REGION_YOUR_GARDEN
+  0x80 + 16, 31,            // REGION_FIELDS
+  0x80 + 16, 31,            // REGION_SWAMP
+  0x80 + 16, 31,            // REGION_FOREST
+  0x80, 15,                 // REGION_CANYONS
+  36, 47,                   // REGION_HOUSE_INTERIOR
+  37, 47,                   // REGION_INN_INTERIOR
+  38, 47,                   // REGION_YOUR_INTERIOR
+  39, 48,                   // REGION_SHOP_INTERIOR
+  40, 33,                   // REGION_TREE_INTERIOR
+  41, 33,                   // REGION_CAVE_INTERIOR
+  33, 33,                   // REGION_ALL_BLACK
+};
 
 // getChunk
 // Returns a value greater than 127 if the chunk was specifically placed.
 // If the chunk is part of a region the returned value will be
-// less than 128.
+// less than 128 (and lastRegion is its region).
 // To get the actual chunk value of a specific chunk, AND (&) the returned
 // chunk with 0x7F (B01111111)
 byte getChunk(byte chunk_pos_x, byte chunk_pos_y)
 {
-  // specific chunks
-  switch (chunk_pos_x + chunk_pos_y * 32)
+  uint16_t position = chunk_pos_x + chunk_pos_y * 32;
+  for (byte i = 0; i < SPECIAL_CHUNKS; i++)
   {
-    case 59:        // House chunk_x:          27 chunk_y:  1
-    case 84:        // House chunk_x:          20 chunk_y:  2
-    case 253:       // House chunk_x:          29 chunk_y:  7
-    case 340:       // House chunk_x:          20 chunk_y: 10
-    case 520:       // House chunk_x:           8 chunk_y: 16
-    case 802:       // House chunk_x:           2 chunk_y: 25
-    case 843:       // House chunk_x:          11 chunk_y: 26
-      return 162;   // chunk 34 + 128
-      break;
-    case 171:       // Big Tree chunk_x:       11 chunk_y:  5
-    case 180:       // Big Tree chunk_x:       20 chunk_y:  5
-    case 192:       // Big Tree chunk_x:        0 chunk_y:  6
-    case 312:       // Big Tree chunk_x:       24 chunk_y:  9
-    case 353:       // Big Tree chunk_x:        1 chunk_y: 11
-    case 368:       // Big Tree chunk_x:       16 chunk_y: 11
-    case 394:       // Big Tree chunk_x:       10 chunk_y: 12
-    case 485:       // Big Tree chunk_x:        5 chunk_y: 15
-    case 493:       // Big Tree chunk_x:       13 chunk_y: 15
-    case 515:       // Big Tree chunk_x:        3 chunk_y: 16
-    case 562:       // Big Tree chunk_x:       18 chunk_y: 17
-    case 605:       // Big Tree chunk_x:       29 chunk_y: 18
-    case 627:       // Big Tree chunk_x:       19 chunk_y: 19
-    case 631:       // Big Tree chunk_x:       23 chunk_y: 19
-    case 716:       // Big Tree chunk_x:       12 chunk_y: 22
-    case 737:       // Big Tree chunk_x:        1 chunk_y: 23
-    case 776:       // Big Tree chunk_x:        8 chunk_y: 24
-    case 873:       // Big Tree chunk_x:        9 chunk_y: 27
-    case 881:       // Big Tree chunk_x:       17 chunk_y: 27
-    case 910:       // Big Tree chunk_x:       14 chunk_y: 28
-      return 170;   // chunk 42 + 128
-      break;
-    case 6:         // Shop chunk_x:            6 chunk_y:  0
-    case 42:        // Shop chunk_x:           10 chunk_y:  1
-    case 379:       // Shop chunk_x:           27 chunk_y: 11
-    case 709:       // Shop chunk_x:            5 chunk_y: 22
-    case 754:       // Shop chunk_x:           18 chunk_y: 23
-      return 171;   // chunk 43 + 128
-      break;
-    case 61:        // Battle cave chunk_x:    29 chunk_y:  1
-    case 33:        // Battle cave chunk_x:     1 chunk_y:  1
-    case 570:       // Battle cave chunk_x:    26 chunk_y: 17
-    case 718:       // Battle cave chunk_x:    14 chunk_y: 22
-      return 172;   // chunk 44 + 128
-      break;
-    case 209:       // Inn chunk_x:            17 chunk_y:  6
-    case 43:        // Inn chunk_x:            11 chunk_y:  1
-    case 513:       // Inn chunk_x:             1 chunk_y: 16
-    case 756:       // Inn chunk_x:            20 chunk_y: 23
-      return 173;   // chunk 45 + 128
-      break;
-    case 801:       // Your House chunk_x:      1 chunk_y: 25
-      return 174;   // chunk 46 + 128
-      break;
-    case 1011:      // interior Inn 2 chunk_x: 11 chunk_y: 31
-      return 167;   // chunk 39 + 128
-      break;
-    case 655:       // FT0010 chunk_x:         15 chunk_y: 20
-      return 146;   // chunk 18 + 128
-      break;
+    uint16_t special = pgm_read_word(&specialChunks[i]);
+    if ((special & 0x0FFF) == position) return pgm_read_byte(&specialChunkType[special >> 12]);
+    if ((special & 0x0FFF) > position) break;
   }
-
-
-  // regions
-  //Point chunk_pos = { .x = chunk_pos_x, .y = chunk_pos_y };
-  switch (getRegion(chunk_pos_x, chunk_pos_y))
+  lastRegion = getRegion(chunk_pos_x, chunk_pos_y);
+  bool solid = getChunkBit(chunk_pos_x, chunk_pos_y);
+  byte chunk = pgm_read_byte(&regionChunk[lastRegion * 2 + solid]);
+  if (chunk & 0x80)
   {
-    case REGION_FIELDS:
-    case REGION_SWAMP:
-    case REGION_FOREST:
-    case REGION_YOUR_GARDEN:
-      if (getChunkBit(chunk_pos_x, chunk_pos_y)) return 31;
-      else
-      {
-        byte b = 0;
-        b |= getChunkBit(chunk_pos_x + 1, chunk_pos_y);
-        b |= getChunkBit(chunk_pos_x, chunk_pos_y - 1) << 1;
-        b |= getChunkBit(chunk_pos_x - 1, chunk_pos_y) << 2;
-        b |= getChunkBit(chunk_pos_x, chunk_pos_y + 1) << 3;
-
-        return b + 16;
-      }
-      break;
-    case REGION_CANYONS:
-      if (getChunkBit(chunk_pos_x, chunk_pos_y)) return 15;
-      else
-      {
-        byte b = 0;
-        b |= getChunkBit(chunk_pos_x + 1, chunk_pos_y);
-        b |= getChunkBit(chunk_pos_x, chunk_pos_y - 1) << 1;
-        b |= getChunkBit(chunk_pos_x - 1, chunk_pos_y) << 2;
-        b |= getChunkBit(chunk_pos_x, chunk_pos_y + 1) << 3;
-        return b;
-      }
-      break;
-
-    case REGION_FOREST_CANYON:
-      if (!getChunkBit(chunk_pos_x, chunk_pos_y)) return 32;
-      else return 31;
-      break;
-    case REGION_SWAMP_FOREST:
-    case REGION_FIELDS_SWAMP:
-    case REGION_FIELDS_CANYONS:
-      if (!getChunkBit(chunk_pos_x, chunk_pos_y)) return (21 + (5 * (getRegion(chunk_pos_x, chunk_pos_y) - REGION_SWAMP_FOREST)));
-      else return 31;
-      break;
-
-    case REGION_SWAMP_ISLAND_ONE:
-    case REGION_SWAMP_ISLAND_TWO:
-      if (!getChunkBit(chunk_pos_x, chunk_pos_y)) return 15;
-      else return 34;
-      break;
-
-    case REGION_LONG_ROAD:
-      if (!getChunkBit(chunk_pos_x, chunk_pos_y)) return 26;
-      else return 31;
-      break;
-    case REGION_APPLE_FARM:
-      if (!getChunkBit(chunk_pos_x, chunk_pos_y)) return 35;
-      else return 34;
-      break;
-    case REGION_HOUSE_INTERIOR:
-    case REGION_INN_INTERIOR:
-    case REGION_YOUR_INTERIOR:
-      if (!getChunkBit(chunk_pos_x, chunk_pos_y)) return (36 + (getRegion(chunk_pos_x, chunk_pos_y) - REGION_HOUSE_INTERIOR));
-      else return 47;
-      break;
-
-    case REGION_SHOP_INTERIOR:
-      if (!getChunkBit(chunk_pos_x, chunk_pos_y)) return 39;
-      else return 48;
-      break;
-
-    case REGION_TREE_INTERIOR:
-    case REGION_CAVE_INTERIOR:
-      if (!getChunkBit(chunk_pos_x, chunk_pos_y)) return (40 + (getRegion(chunk_pos_x, chunk_pos_y)) - REGION_TREE_INTERIOR);
-      else return 33;
-      break;
-    case REGION_ALL_BLACK:
-      if (!getChunkBit(chunk_pos_x, chunk_pos_y)) return 33;
-      else return 33;
-      break;
+    chunk &= 0x7F;
+    chunk += getChunkBit(chunk_pos_x + 1, chunk_pos_y);
+    chunk += getChunkBit(chunk_pos_x, chunk_pos_y - 1) << 1;
+    chunk += getChunkBit(chunk_pos_x - 1, chunk_pos_y) << 2;
+    chunk += getChunkBit(chunk_pos_x, chunk_pos_y + 1) << 3;
   }
-  return 0; // default chunk
+  return chunk;
 }
 
+// tile number i (x + 6 * y) of chunk number chunk, out of the packed chunks[]
+byte getChunkTile(byte chunk, byte i)
+{
+  byte bits = 6;
+  uint16_t pos = 5148 + (chunk - 32) * 216;
+  if (chunk < 32)
+  {
+    bits = 4;
+    pos = 2700 + (chunk - 15) * 144;
+    if (chunk < 15)
+    {
+      bits = 5;
+      pos = chunk * 180;
+    }
+  }
+  pos += i * bits;
+  uint16_t data = pgm_read_byte(chunks + (pos >> 3)) | ((uint16_t)pgm_read_byte(chunks + (pos >> 3) + 1) << 8);
+  byte tile = (data >> (pos & 7)) & ((1 << bits) - 1);
+  if (bits == 4 && tile > 7) tile += 24;
+  return tile;
+}
+
+// the tiles that are not part of a chunk: x, y and what it is
+// bits 0 - 2: the bit in gameTriggers / bit 3: gameTriggers[2] instead of [3]
+// bits 4 - 5: 0 sign / 1 rock until the bit is set (amulet used) / 2 chest (opened when the bit is set) / 3 chest of the cave you are in
+#define SPECIAL_TILES                13
+#define SPECIAL_SIGN                 0x00
+#define SPECIAL_ROCK                 0x10
+#define SPECIAL_CHEST                0x20
+#define SPECIAL_CAVE                 0x30
+const byte PROGMEM specialTiles[] =
+{
+  89,   8, SPECIAL_SIGN,
+  182, 95, SPECIAL_SIGN,
+  93, 124, SPECIAL_SIGN,
+  11, 157, SPECIAL_SIGN,
+  93, 123, SPECIAL_ROCK  | 0,                  // FIELDS - SWAMP    AMULET OF WATER
+  183, 95, SPECIAL_ROCK  | 1,                  // SWAMP - FOREST    AMULET OF LEAFS
+  89,   9, SPECIAL_ROCK  | 2,                  // FOREST - CANYONS  AMULET OF FIRE
+  153, 26, SPECIAL_CHEST | 6,                  // chest in forest middle
+  147, 98, SPECIAL_CHEST | 5,                  // chest in swamp north
+  67,  92, SPECIAL_CHEST | 4,                  // chest in fields
+  69,  20, SPECIAL_CHEST | 7,                  // chest in north canyons
+  139, 181, SPECIAL_CHEST | 8 | 4,             // chest in the house
+  44, 188, SPECIAL_CAVE,                       // chest in the cave
+};
+
+// tiles 0 - 7 of the fields (and your garden) and of the swamp
+const byte PROGMEM tileRemap[] = { 0, 1, 0, 5, 5, 5, 6, 2,  12, 10, 10, 5, 10, 5, 6, 10 };
 
 byte getTileID(uint16_t world_pos_x, uint16_t world_pos_y)
 {
   if (world_pos_x > 3056 || world_pos_y > 3136) return TILE_ROCK;
-  switch (((world_pos_x >> 4) + (world_pos_y >> 4) * 192))
+  byte tile_x = world_pos_x >> 4;
+  byte tile_y = world_pos_y >> 4;
+  for (byte i = 0; i < SPECIAL_TILES; i++)
   {
-    case 1625:                                                                                     // 89 + (8 * 192)
-    case 18422:                                                                                    // 182 + (95 * 192)
-    case 23901:                                                                                    // 93 + (124 * 192)
-    case 30155:                                                                                    // 11 + (157 * 192)
-    //case 36189:                                                                                    // 93 + (188 * 192) battle cave
-      return TILE_SIGN;
-      break;
-    case 23709:                                                                                    // 93 + (123 * 192) FIELDS - SWAMP
-      if (!bitRead(player.gameTriggers[3], 0)) return TILE_ROCK;                                   // AMULET OF WATER NOT USED
-      else break;
-    case 18423:                                                                                    // 183 + (95 * 192) SWAMP - FOREST
-      if (!bitRead(player.gameTriggers[3], 1)) return TILE_ROCK;                                   // AMULET OF LEAFS NOT USED
-      else break;
-    case 1817:                                                                                     // 89 + (9 * 192) FOREST - CANYONS
-      if (!bitRead(player.gameTriggers[3], 2)) return TILE_ROCK;                                   // AMULET OF FIRE NOT USED
-      else break;
-    case 5145:                                                                                     // 153 + (26 * 192) CHEST IN FORREST MIDDLE
-      if (bitRead(player.gameTriggers[3], 6)) return TILE_OPENED_CHEST;                            // chunk: 25, 4: 29 : 100
-      else return TILE_CLOSED_CHEST;
-      break;
-    case 18963:                                                                                    // 147 + (98 * 192) CHEST IN SWAMP NORTH
-      if (bitRead(player.gameTriggers[3], 5)) return TILE_OPENED_CHEST;                            // chunk: 24, 16: 40 : 384
-      else return TILE_CLOSED_CHEST;
-      break;
-    case 17731:                                                                                    // 67 + (92 * 192) CHEST IN FIELDS
-      if (bitRead(player.gameTriggers[3], 4)) return TILE_OPENED_CHEST;                            // chunk: 1, 20: 21 : 20
-      else return TILE_CLOSED_CHEST;
-      break;
-    case 3909:                                                                                     // 69 + (20 * 192) CHEST IN NORTH CANYONS
-      if (bitRead(player.gameTriggers[3], 7)) return TILE_OPENED_CHEST;                            // chunk: 3, 2: 5 : 6
-      else return TILE_CLOSED_CHEST;
-      break;
-    case 34891:                                                                                    // 139 + (181 * 192) CHEST IN THE HOUSE
-      if (bitRead(player.gameTriggers[2], 4)) return TILE_OPENED_CHEST;                            // chunk: 23, 30: 983
-      else return TILE_CLOSED_CHEST;
-      break;
-
-    /*case 36188:
-      //if (bitRead(player.bossActiveAlive, player.lastDoor - 28)) return TILE_OPENED_CHEST;         // 92 + (188 * 192) Boss cave chest
-      //else return TILE_CLOSED_CHEST;
-      if (!bitRead(player.bossActiveAlive, player.lastDoor - 28)) return TILE_CLOSED_CHEST;
-      break;*/
-
-    case 36140:                                                                                    // 44 + (188 * 192) cave
-      if (bitRead(player.gameTriggers[player.lastDoor / 8], player.lastDoor % 8)) return TILE_OPENED_CHEST;
-      else return TILE_CLOSED_CHEST;
-
-  }
-
-  byte chunk = getChunk(world_pos_x / 96, world_pos_y / 96);
-  byte tile_pos_x = (world_pos_x % 96) >> 4;
-  byte tile_pos_y = (world_pos_y % 96) >> 4;
-  byte tile;
-  byte chunkNumber = chunk & 0x7F;
-  if (chunkNumber < 15) tile = pgm_read_byte(chunks + (chunkNumber * 36) + (tile_pos_x) + (tile_pos_y) * 6);
-  else if (chunkNumber < 32)
-  {
-    if (chunkNumber < 24) tile = pgm_read_byte(chunks + (chunkNumber * 36) + (tile_pos_x) + (tile_pos_y) * 6) & 0x0F;
-    else tile = (pgm_read_byte(chunks + ((chunkNumber - 8) * 36) + (tile_pos_x) + (tile_pos_y) * 6)) >> 4;
-    if (tile > 7) tile += 24;
-  }
-  else
-  {
-    chunkNumber -= 8;
-    tile = pgm_read_byte(chunks + (chunkNumber * 36) + (tile_pos_x) + (tile_pos_y) * 6);
-  }
-  if (chunk < 127)
-  {
-    switch (getRegion(world_pos_x / 96, world_pos_y / 96))
+    if (pgm_read_byte(&specialTiles[i * 3]) == tile_x && pgm_read_byte(&specialTiles[i * 3 + 1]) == tile_y)
     {
-        break;
-      case REGION_FIELDS:
-      case REGION_YOUR_GARDEN:
-        if (tile > 30) tile = 32;
-        else if (tile == 2) tile = 0;
-        else if (tile == 3 || tile == 4) tile = 5;
-        else if (tile == 7) tile = 2;
-        break;
-      case REGION_SWAMP:
-        if (tile > 30) tile = 14;
-        else if (tile == 0) tile = 12;
-        else if (tile == 3) tile = 5;
-        else if (tile == 1 || tile == 2 || tile == 4 || tile == 7) tile = 10;
-        break;
+      byte what = pgm_read_byte(&specialTiles[i * 3 + 2]);
+      byte type = what & 0x30;
+      if (type == SPECIAL_SIGN) return TILE_SIGN;
+      byte bit = what & 7;
+      byte triggers = player.gameTriggers[(what & 8) ? 2 : 3];
+      if (type == SPECIAL_CAVE) triggers = player.gameTriggers[player.lastDoor / 8], bit = player.lastDoor % 8;
+      bool set = bitRead(triggers, bit);
+      if (type != SPECIAL_ROCK) return set ? TILE_OPENED_CHEST : TILE_CLOSED_CHEST;
+      if (!set) return TILE_ROCK;
+      break;
     }
   }
 
-  switch (tile)
+  byte chunk = getChunk(world_pos_x / 96, world_pos_y / 96);
+  byte tile = getChunkTile(chunk & 0x7F, ((world_pos_x % 96) >> 4) + ((world_pos_y % 96) >> 4) * 6);
+  if (chunk < 128 && (lastRegion == REGION_SWAMP || lastRegion == REGION_FIELDS || lastRegion == REGION_YOUR_GARDEN))
   {
-    case 10:
-    case 12:
-    case 14:
-      tile += frameBoolean;
-      break;
-    case 11:
-    case 13:
-    case 15:
-      tile -= frameBoolean;
-      break;
+    byte swamp = (lastRegion == REGION_SWAMP);
+    if (tile > 30) tile = swamp ? 14 : 32;
+    else if (tile < 8) tile = pgm_read_byte(&tileRemap[swamp * 8 + tile]);
   }
+
+  if (tile > 9 && tile < 16) tile += (tile & 1) ? -frameBoolean : frameBoolean;     // water and leafs move
 
   return tile;
 }
-
-
 
 bool getSolid(uint16_t world_x, uint16_t world_y)
 {
   return (getTileID(world_x, world_y) >= 14);
 }
-
-
 
 void drawTiles()
 {
@@ -339,28 +218,13 @@ void drawTiles()
   }
 }
 
-
 void checkDoors()
 {
   if (!(playerDirection & 0B00000001)) //WALKING NORTH OR SOUTH
   {
-    Point p =
-    {
-      .x = player.x,
-      .y = player.y,
-    };
-
     for (byte i = 0; i < TOTAL_DOORS; i++)
     {
-      Rect door =
-      {
-        .x = (16 * pgm_read_byte(&doors[i * 2])) - 3,
-        .y = 16 * pgm_read_byte(&doors[(i * 2) + 1 ]),
-        .width = 10,
-        .height = 10
-      };
-
-      if (arduboy.collide(p, door))
+      if ((uint16_t)(player.x + 3 - 16 * pgm_read_byte(&doors[i * 2])) < 10 && (uint16_t)(player.y - 16 * pgm_read_byte(&doors[(i * 2) + 1])) < 10)
       {
         if (playerDirection == FACING_NORTH) player.lastDoor = i;
         gameState = WALKING_THROUGH_DOOR;

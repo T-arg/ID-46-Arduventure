@@ -12,10 +12,10 @@ extern bool textReset;
 
 bool checkPlayerCollision(byte orientation)
 {
-  uint16_t pointOne = player.x + collisionPoints[2 * orientation][0];
-  uint16_t pointTwo = player.y + collisionPoints[2 * orientation][1];
-  uint16_t pointThree = player.x + collisionPoints[(2 * orientation) + 1][0];
-  uint16_t pointFour = player.y + collisionPoints[(2 * orientation) + 1][1];
+  uint16_t pointOne = player.x + pgm_read_byte(&collisionPoints[2 * orientation][0]);
+  uint16_t pointTwo = player.y + pgm_read_byte(&collisionPoints[2 * orientation][1]);
+  uint16_t pointThree = player.x + pgm_read_byte(&collisionPoints[(2 * orientation) + 1][0]);
+  uint16_t pointFour = player.y + pgm_read_byte(&collisionPoints[(2 * orientation) + 1][1]);
   if (
     !getSolid(pointOne, pointTwo) &&
     !getSolid(pointThree, pointFour) &&
@@ -31,6 +31,15 @@ bool checkPlayerCollision(byte orientation)
 }
 
 
+
+// moves the cursor up or down between 0 and maxY, returns true when a direction was pressed and could move
+bool moveCursorY(int maxY)
+{
+  if (arduboy.justPressed(UP_BUTTON) && (cursorY > 0)) cursorY--;
+  else if (arduboy.justPressed(DOWN_BUTTON) && (cursorY < maxY)) cursorY++;
+  else return false;
+  return true;
+}
 
 void buttonsUpDownA()
 {
@@ -143,8 +152,7 @@ void checkInputs()
       break;
 
     case STATE_GAME_INVENTORY:
-      if (arduboy.justPressed(UP_BUTTON) && (cursorY > 0)) cursorY--;
-      else if (arduboy.justPressed(DOWN_BUTTON) && (cursorY < 4)) cursorY++;
+      if (moveCursorY(4)) {}
       else if (arduboy.justPressed(A_BUTTON))
       {
         gameState = STATE_GAME_PLAYING;
@@ -182,8 +190,7 @@ void checkInputs()
       }
       break;
     case STATE_GAME_EQUIP:
-      if (arduboy.justPressed(UP_BUTTON) && (cursorY > 0)) cursorY--;
-      else if (arduboy.justPressed(DOWN_BUTTON) && (cursorY < 2)) cursorY++;
+      if (moveCursorY(2)) {}
       else if (arduboy.justPressed(A_BUTTON))
       {
         gameState = STATE_GAME_INVENTORY;
@@ -213,8 +220,7 @@ void checkInputs()
           gameState = STATE_GAME_PLAYING;
           question = false;
         }
-        else if (arduboy.justPressed(UP_BUTTON) && (cursorY > 0)) cursorY--;
-        else if (arduboy.justPressed(DOWN_BUTTON) && (cursorY < TOTAL_SHOP_ITEMS - 1)) cursorY++;
+        else if (moveCursorY(TOTAL_SHOP_ITEMS - 1)) {}
         else if (arduboy.justPressed(B_BUTTON))
         {
           if (!question)
@@ -251,8 +257,7 @@ void checkInputs()
     case STATE_GAME_AMULET:
       if (!yesNo)
       {
-        if (arduboy.justPressed(UP_BUTTON) && (cursorY > 0)) cursorY--;
-        else if ((cursorY < bitCount(player.hasStuff[2 * (gameState - STATE_GAME_ITEMS)]) - 1) && arduboy.justPressed(DOWN_BUTTON)) cursorY++;
+        if (moveCursorY(bitCount(player.hasStuff[2 * (gameState - STATE_GAME_ITEMS)]) - 1)) {}
         else if (arduboy.justPressed(A_BUTTON))
         {
           cursorY = (gameState == STATE_GAME_ITEMS) ? 0 : (gameState - 13);
